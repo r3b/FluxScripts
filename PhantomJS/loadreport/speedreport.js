@@ -70,8 +70,8 @@ function printToFile(data) {
         myfile = 'speedreports/' + fileid + '.' + extension;
     }else{
         fileid = phantom.args[1];
-        myjson = 'speedreports/' + fileid + '.js';
-        myfile = 'speedreports/' + fileid + '.' + extension;
+        myjson = fileid;
+        myfile = null;
     }
 
     if(myfile!==null){
@@ -81,7 +81,7 @@ function printToFile(data) {
                 fs.remove(myfile);
             }
             if(!fs.exists('speedreport.html')){
-                html = fs.read('loadreport/speedreport.html');
+                html = fs.read('/reports/PhantomJS/loadreport/speedreport.html');
             }else{
                 html = fs.read('speedreport.html');
             }
