@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FluxUI Report</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="Wesley Hales">
+
+    <!-- Le styles -->
+    <link href="http://loadreport.wesleyhales.com/bootstrap/css/bootstrap.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+        }
+    </style>
+    <link href="http://loadreport.wesleyhales.com/bootstrap/css/bootstrap-responsive.css" rel="stylesheet">
+
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+    <script type="text/javascript" src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+
+</head>
+
+<body>
+<div class="container-fluid">
+
+    <div class="row-fluid" >
+        <div class="span12">
+
+            <h2>wesleyhales.com</h2>
+            <br/>
+            <h3>Elapsed Load Time</h3>
+            <canvas id="elapsed" height="150" width="1200"></canvas>
+
+            <h3>Number of Resources</h3>
+            <canvas id="resources" height="150" width="1200"></canvas>
+            <div id="report">
+                <div id="formProgress"></div>
+            </div>
+        </div>
+    </div>
+    <hr>
+
+    <div id="myModal" class="modal hide fade" style="width:100%;margin-left: -50%" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+            <h3 id="myModalLabel"><span id="commitInfo"></span></h3>
+        </div>
+        <div class="modal-body">
+            <iframe id="commitReport1" width="1200px" height="800px" seamless></iframe>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-dismiss="modal" aria-hidden="true">Close</button>
+        </div>
+    </div>
+
+
+</div><!--/.fluid-container-->
+
+<!-- Le javascript
+================================================== -->
+<!-- Placed at the end of the document so the pages load faster -->
+<script src="http://loadreport.wesleyhales.com/bootstrap/js/jquery.js"></script>
+<script src="http://loadreport.wesleyhales.com/bootstrap/js/bootstrap-transition.js"></script>
+<script src="http://loadreport.wesleyhales.com/bootstrap/js/bootstrap-alert.js"></script>
+<script src="http://loadreport.wesleyhales.com/bootstrap/js/bootstrap-modal.js"></script>
+<script src="js/Chart.js"></script>
+
+<script type="text/javascript">
+
+    $( document ).ready( function() {
+
+        $.getJSON('reports\/confess-report.json', function(json) {
+                console.log('json.length',json);
+                buildReport(json);
+        });
+
+
+
+        function buildReport(reportjson){
+            var lineChartData = {
+                labels : [],
+                datasets : [
+                    {
+                        fillColor : "rgba(151,187,205,0.3)",
+                        strokeColor : "rgba(151,187,205,1)",
+                        pointColor : "rgba(151,187,205,1)",
+                        data : [],
+                        url: []
+                    }
+                ]
+
+            },
+            barChartData = {
+                labels : [],
+                datasets : [
+                    {
+                        fillColor : "rgba(151,187,205,0.3)",
+                        strokeColor : "rgba(151,187,205,1)",
+                        data : []
+                    }
+                ]
+
+            };
+
+            var lineOptions = {
+                scaleShowGridLines : true,
+                scaleShowLabels : true,
+                animationSteps : 150,
+                rotateLabels: 45,
+                showTooltips: true
+            },
+            elapsedChartOptions = {
+                tooltips: {
+                    labelTemplate: '  <%=value%> milliseconds'
+                }
+            },
+            resourcesChartOptions = {
+                tooltips: {
+                    labelTemplate: '  <%=value%> total resources'
+                }
+            };
+
+            var rows = [], gotem = false;
+            var $header = $('<thead></thead>');
+            var $table = $('<table class=\"table table-bordered table-striped\"></table>');
+            var errorIdx = 0;
+            for(obj in reportjson){
+                var thisreport = reportjson[obj];
+                //only run one time for column headers and chart labels
+                if(!gotem){
+                    for(var key in thisreport)
+                    {
+                        if(thisreport.hasOwnProperty(key))
+                        {
+                            //todo - remove date and time after a few commits - legacy stuff
+                            if(key !== 'commitId' && key !== 'date' && key !== 'time' && key !== 'taskName' && key !== 'phantomCacheEnabled'){
+                                var htext = key.replace(/([A-Z])/g, " $1");
+                                htext = (htext.charAt(0).toUpperCase() + htext.slice(1));
+                                $header.append('<th>' + htext + '</th>');
+                            }
+                        }
+                    }
+                    gotem = true;
+                    $table.append($header);
+                }
+                var $row = $('<tr></tr>'),thisrow;
+                for(var key2 in thisreport){
+                    //console.log(key2);
+                    if(key2 === 'errors'){
+                        var rowWithErrors = $('<td></td>');
+                        $('<a>',{
+                            text: thisreport[key2].length + ' JavaScript Errors',
+                            title: 'errors',
+                            click: function(){$('.js-error').toggle();}
+                        }).appendTo(rowWithErrors);
+
+                        for(error in thisreport[key2]){
+                            rowWithErrors.append('<div id=\"js-errors' + errorIdx + '\" class=\"js-error\" style=\"display:none\">' + thisreport[key2][error] + '</div>');
+                            errorIdx++;
+                        }
+                        thisrow = $row.append(rowWithErrors);
+
+                    //setup some JS to toggle
+                    }else if(key2 === 'slowestResource' || key2 === 'largestResource'){
+
+                        var resRow = $('<td></td>');
+                        $('<a>',{
+                            text: 'Show it',
+                            title: 'res',
+                            click: function(){$('.res').toggle();}
+                        }).appendTo(resRow);
+                        resRow.append('<div class=\"res\" style=\"display:none\">' + thisreport[key2] + '</div>');
+                        thisrow = $row.append(resRow);
+
+                    //put everything else in a cell
+                    //todo - remove date and time after a few commits - legacy stuff
+                    }else if(key2 !== 'date' && key2 !== 'time' && key2 !== 'taskName' && key2 !== 'phantomCacheEnabled'){
+
+                        var cellVal = thisreport[key2],
+                                append = true;
+
+                        if(key2 === 'timeStamp'){
+                            cellVal = new Date(thisreport[key2]);
+                            cellVal = cellVal.toLocaleString();
+                            lineChartData.labels.push(cellVal);
+                            barChartData.labels.push(cellVal);
+                        }
+
+                        if(key2 === 'elapsedLoadTime'){
+                            lineChartData.datasets[0].data.push(cellVal);
+                        }
+
+                        if(key2 === 'commitId'){
+                            function nodeFn(cellVal){
+                                return function(){showCommitInfo(cellVal)}
+                            };
+
+                            lineChartData.datasets[0].url.push(nodeFn(cellVal));
+                            append = false;
+                        }
+
+                        if(key2 === 'numberOfResources'){
+                            barChartData.datasets[0].data.push(cellVal)
+                        }
+
+                        if(append){
+                            thisrow = $row.append('<td>'+ cellVal +'</td>');
+                        }
+                    }
+
+                }
+                $table.append(thisrow).appendTo('#report');
+            }
+
+            function showCommitInfo(id){
+                $.getJSON('https://api.github.com/repos/wesleyhales/wesleyhales.com/commits/' + id, function(json) {
+                    document.getElementById('commitInfo').innerHTML = "<br/>Author: " + json.commit.author.name + "<br/>Commit message: " + json.commit.message + "<br/>"
+                });
+
+//                $.get('speedreports/' + id + '.html', function(text) {
+//                    var frame = getFrame();
+//                    frame.write(text);
+//                    setTimeout(function(){
+//                        var bubbleContainer = frame.getElementById('contentBubblesContainer');
+//                        var barGraphContainer = frame.getElementById('barGraphContainer');
+//                        document.getElementById('targetBubbles').appendChild(document.adoptNode(bubbleContainer));
+//                        document.getElementById('requestLcContainer').appendChild(document.adoptNode(barGraphContainer));
+//                        $('#myModal').modal('toggle');
+//                    },2000)
+//                });
+
+                document.getElementById('commitReport1').src = 'speedreports/' + id + '.html';
+                document.getElementById('commitReport1').width = '100%';
+                document.getElementById('commitReport1').style.display = '';
+                $('#myModal').modal('toggle');
+            }
+
+            var myLine = new Chart(document.getElementById("elapsed").getContext("2d"),elapsedChartOptions).Line(lineChartData,lineOptions);
+            var myBar = new Chart(document.getElementById("resources").getContext("2d"),resourcesChartOptions).Bar(barChartData,lineOptions);
+        }
+
+
+    });
+
+    $.fn.serializeObject = function() {
+        var o = {};
+        var a = this.serializeArray();
+        $.each(a, function() {
+            if (o[this.name]) {
+                if (!o[this.name].push) {
+                    o[this.name] = [o[this.name]];
+                }
+                o[this.name].push(this.value || '');
+            } else {
+                o[this.name] = this.value || '';
+            }
+        });
+        return o;
+    };
+
+
+
+    var getFrame = function () {
+        var frame = document.getElementById("temp-frame");
+
+        if (!frame) {
+            // create frame
+            frame = document.createElement("iframe");
+            frame.setAttribute("id", "temp-frame");
+            frame.setAttribute("name", "temp-frame");
+            frame.setAttribute("seamless", "");
+//            frame.setAttribute("sandbox", "allow-same-origin");
+//            frame.style.display = 'none';
+            document.documentElement.appendChild(frame);
+        }
+        // load a page
+        return frame.contentDocument;
+    };
+
+</script>
+
+<script type="text/javascript">
+
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-1241000-11']);
+    _gaq.push(['_setDomainName', 'wesleyhales.com']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+
+</script>
+</body>
+</html>
